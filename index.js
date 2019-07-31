@@ -10,6 +10,8 @@ import {
     PlaneBufferGeometry,
     ShaderMaterial,
     Vector2,
+    VideoTexture,
+    ClampToEdgeWrapping
 } from 'three';
 import PingpongRenderTarget from "./src/PingpongRenderTarget"
 import RenderTarget from "./src/RenderTarget"
@@ -21,7 +23,7 @@ import Controls from "./src/Controls";
 //////////////////////////////////////
 
 let w = window.innerWidth
-let h = window.innerHeight
+let h = w / 1.35
 
 const renderer = new WebGLRenderer({
     alpha: true
@@ -32,7 +34,7 @@ const scene = new Scene();
 const camera = new OrthographicCamera(-w / 2, w / 2, h / 2, -h / 2, 0.1, 100);
 camera.position.z = 1
 
-// 1 init buffers 
+// 1 init buffers
 //////////////////////////////////////
 
 let size = 512 // particles amount = ( size ^ 2 )
@@ -45,7 +47,7 @@ let ptexdata = new Float32Array(count * 4)
 let id = 0, u,v;
 for (let i = 0; i < count; i++) {
 
-    //point cloud vertex 
+    //point cloud vertex
     id = i * 3
     pos[id++] = pos[id++] = pos[id++] = 0;
 
@@ -62,18 +64,18 @@ for (let i = 0; i < count; i++) {
     ptexdata[id++] = Math.random() // normalized pos y
     ptexdata[id++] = Math.random() // normalized angle
     ptexdata[id++] = 1
-    
+
 
 }
 
-// 2 data & trails 
+// 2 data & trails
 //////////////////////////////////////
 
-//performs the diffusion and decay 
+//performs the diffusion and decay
 let diffuse_decay = new ShaderMaterial({
     uniforms: {
         points: { value: null },
-        decay: {value: .9 }        
+        decay: {value: .9 }
     },
     vertexShader: require('./src/glsl/quad_vs.glsl'),
     fragmentShader: require('./src/glsl/diffuse_decay_fs.glsl')
@@ -81,17 +83,21 @@ let diffuse_decay = new ShaderMaterial({
 let trails = new PingpongRenderTarget(w, h, diffuse_decay)
 
 
-// 3 agents 
+// 3 agents
 //////////////////////////////////////
 
-//moves agents around 
+//moves agents around
+const webcam = document.getElementById("webcam")
+const texture = new VideoTexture(webcam)
+
 let update_agents = new ShaderMaterial({
     uniforms: {
         data: { value: null },
-        sa: { value: 2 },
-        ra: { value: 4 },
+        sa: { value: 22 },
+        ra: { value: 11 },
         so: { value: 12 },
-        ss: { value: 1.1 }
+        ss: { value: 1.1 },
+        webcam: { value: null }
     },
     vertexShader: require('./src/glsl/quad_vs.glsl'),
     fragmentShader: require('./src/glsl/update_agents_fs.glsl')
@@ -99,10 +105,24 @@ let update_agents = new ShaderMaterial({
 let agents = new PingpongRenderTarget(size, size, update_agents, ptexdata)
 
 
+// initialize webcam
+if ( navigator.mediaDevices && navigator.mediaDevices.getUserMedia ) {
+  var constraints = { video: { width: w, height: h, facingMode: 'user' } };
+  navigator.mediaDevices.getUserMedia( constraints ).then( function ( stream ) {
+    // apply the stream to the video element used in the texture
+    webcam.srcObject = stream
+    webcam.play();
+  } ).catch( function ( error ) {
+    console.error( 'Unable to access the camera/webcam.', error );
+  } );
+} else {
+  console.error( 'MediaDevices interface not available.' );
+}
+
 // 4 point cloud
 //////////////////////////////////////
 
-//renders the updated agents as red dots 
+//renders the updated agents as red dots
 let render_agents = new ShaderMaterial({
     vertexShader: require('./src/glsl/render_agents_vs.glsl'),
     fragmentShader: require('./src/glsl/render_agents_fs.glsl')
@@ -118,7 +138,8 @@ let postprocess = new ShaderMaterial({
     uniforms: {
         data: {
             value: null
-        }
+        },
+        webcam: { value: null }
     },
     vertexShader: require('./src/glsl/quad_vs.glsl'),
     fragmentShader: require('./src/glsl/postprocess_fs.glsl')
@@ -128,34 +149,36 @@ postprocess_mesh.scale.set(w, h, 1)
 scene.add(postprocess_mesh)
 
 
-// 6 interactive controls 
+// 6 interactive controls
 //////////////////////////////////////
 let controls = new Controls( renderer, agents )
 controls.count = ~~(size * size * .05)
 
 
-// animation loop 
+// animation loop
 //////////////////////////////////////
 
 function raf(){
-    
+
     requestAnimationFrame(raf)
 
     time = (Date.now() - start) * 0.001
-    
+
     trails.material.uniforms.points.value = render.texture
     trails.render( renderer, time )
-    
+
     agents.material.uniforms.data.value = trails.texture
+    update_agents.uniforms.webcam.value = texture
     agents.render(renderer, time)
-    
+
     render.render( renderer, time )
-    
+
     postprocess_mesh.material.uniforms.data.value = trails.texture
+    postprocess_mesh.material.uniforms.webcam.value = texture
     renderer.setSize(w,h)
     renderer.clear()
     renderer.render(scene, camera)
-    
+
 }
 
 //////////////////////////////////////////////////

@@ -43,7 +43,7 @@ export default class PingpongRenderTarget {
         rt_a.texture = tex.clone()
         rt_b.texture = tex;
 
-        this.material = material        
+        this.material = material
         this.material.uniforms["input_texture"] = {value: this.texture};
         this.material.uniforms["resolution"] = {value : new Vector2(w,h)};
         this.material.uniforms["time"] = {value : 0};
@@ -58,17 +58,17 @@ export default class PingpongRenderTarget {
         this.scene.add(this.mesh)
 
     }
-    
+
     switch () {
         this.current = this.current == this.rt_a ? this.rt_b : this.rt_a,
         this.next = this.current == this.rt_a ? this.rt_b : this.rt_a
     }
-    
+
     render(renderer, time=0) {
-        
+
         this.switch()
         this.mesh.visible = true;
-        
+
         this.material.uniforms.input_texture.value = this.texture;
         this.material.uniforms.time.value = time;
 
@@ -77,7 +77,7 @@ export default class PingpongRenderTarget {
         renderer.render(this.scene, this.camera)
         renderer.setRenderTarget(null)
         this.mesh.visible = false;
-        
+
     }
 
     get texture () {
